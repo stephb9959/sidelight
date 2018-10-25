@@ -5,7 +5,7 @@ Adafruit_MCP23017           _mcp_X ,
                             _mcp_Y , 
                             _mcp_Z ;
 
-SideLightManager            SideLight ;
+// SideLightManager            SideLight ;
 
 SideLightPinBasic::SideLightPinBasic( uint8_t pin , const char * name )
             : _pin( pin ) , _name( name )
@@ -18,83 +18,129 @@ SideLightPinBasic::~SideLightPinBasic()
     
 }
         
-OutputPin::OutputPin( const SideLightPinDef pin, const char * name , bool initial_value , bool reverse , bool publish )
-    :   SideLightPinBasic( 0 , name ) , 
-        _initial_value(initial_value),
+OutputPin::OutputPin( SideLightManager & SL , const SideLightPinDef pin, const char * name , bool initial_value , bool reverse , bool publish )
+    :
+        SideLightPinBasic( 0 , name ) , 
+        _sl(SL),
+        _mcp(pin.second),
+        _real_pin(pin.first),
+        _value(initial_value),
         _reverse(reverse) ,
+        _initial_value(initial_value),
         _publish(publish)
 {
-    _real_pin = pin.first ; 
-    _mcp = pin.second ;
-    
-    __pinMode = std::bind(&Adafruit_MCP23017::pinMode,_mcp,std::placeholders::_1,std::placeholders::_2) ;
-    __digitalWrite = std::bind(&Adafruit_MCP23017::digitalWrite,_mcp,std::placeholders::_1,std::placeholders::_2) ;
+    do_pinMode = [this]() { _mcp->pinMode( _real_pin , OUTPUT ); } ;
+    do_digitalWrite = [this](bool Value) { _mcp->digitalWrite( _real_pin , Value ); };
 
-    SideLight.AddPin( this );
-}
+    _sl.AddPin( this );
+} 
 
-template<typename T> constexpr bool ValidPin(T pin)
-{
-    return pin != D0;
-}
-
-void pinMode2( uint8_t a , uint8_t b ) 
-{ 
-    Serial.println("pinMode2");
-    pinMode( (uint16_t) a , (PinMode) b ); 
-};
-
-OutputPin::OutputPin( uint8_t pin_name , const char * name , bool initial_value , bool reverse , bool publish )
-    :   SideLightPinBasic( pin_name , name ) , 
-        _initial_value(initial_value),
+OutputPin::OutputPin( SideLightManager & SL ,uint8_t pin_name , const char * name , bool initial_value , bool reverse , bool publish )
+    :   
+        SideLightPinBasic( pin_name , name ) , 
+        _sl(SL),
+        _mcp(nullptr),
+        _real_pin(pin_name),
+        _value(initial_value),
         _reverse(reverse) ,
+        _initial_value(initial_value),
         _publish(publish)
 {
+    do_pinMode = [this]() { pinMode( _real_pin , OUTPUT ); } ;
+    do_digitalWrite = [this](bool Value) { /* Serial.printf("OUTPUT: Pin=%d Value=%d\r\n", _real_pin , Value ); */ digitalWrite( _real_pin , Value ); };
 
-//   static_assert( ValidPin<uint8_t>(pin_name)  ,"bit position out of range");
-
-    _real_pin = pin_name ;
-    __pinMode = pinMode2 ;
-    __digitalWrite = digitalWrite ;
-
-    *set_pin_mode = [this]() { Serial.println("Lambda") ; pinMode( _real_pin , OUTPUT ); } ;
-
-    SideLight.AddPin( this );
+    _sl.AddPin( this );
 }
         
 OutputPin::~OutputPin()
 {
-    SideLight.RemovePin( this );
+    _sl.RemovePin( this );
 }
-
-void OutputPin::pinModeX( uint8_t a , uint8_t b ) 
-{ 
-    Serial.println("pinModeX");
-    pinMode( (uint16_t) a , (PinMode) b ); 
-};
 
 void OutputPin::begin()
 {
-    // __pinMode( _real_pin , OUTPUT );
-    (*set_pin_mode)();
-    __digitalWrite( _real_pin , _value = _reverse ? !_initial_value : _initial_value );
-    
+    do_pinMode();
+    do_digitalWrite( _value = _reverse ? !_initial_value : _initial_value );
+
     if(_publish)
+    {
         Particle.variable( this->name() , _value );
+    }
 }
 
 void OutputPin::set( bool value )
 {
-    Serial.printf( "PINMODE=%0x" , set_pin_mode );
-    Serial.println("__digitalWrite");
-    __digitalWrite( _real_pin , _value = _reverse ? !value : value );
+    do_digitalWrite( _value = _reverse ? !value : value );
 }
 
 void OutputPin::unset()
 {
     set(false);
 }
-        
+  
+//
+//
+//
+
+InputPin::InputPin( SideLightManager & SL , const SideLightPinDef pin , const char * name , PinMode mode , bool publish )
+    :   
+        SideLightPinBasic( 0 , name ) , 
+        _sl(SL),
+        _mcp(pin.second),
+        _real_pin(pin.first),
+        _mode(mode),
+        _publish(publish)
+{
+    do_pinMode = [this]() 
+            { 
+                _mcp->pinMode( _real_pin , INPUT );
+                _mcp->pullUp( _real_pin , _mode == INPUT_PULLUP ? 1 : 0 );
+            } ;
+    do_digitalRead = [this] () -> int { _value = _mcp->digitalRead( _real_pin ); /* Serial.printf("INPUT pin=%d value=%d\r\n" , _real_pin , _value ); */ return _value; };
+
+    _sl.AddPin( this );
+}
+
+
+
+InputPin::InputPin( SideLightManager & SL , uint8_t pin_name , const char * name , PinMode mode, bool publish )
+    :   
+        SideLightPinBasic( pin_name , name ) , 
+        _sl(SL),
+        _mcp(nullptr),
+        _real_pin(pin_name),
+        _mode(mode),
+        _publish(publish)
+{
+    do_pinMode = [this]() { pinMode( _real_pin , _mode ); } ;
+    do_digitalRead = [this]  () -> int { _value = digitalRead( _real_pin ); /* Serial.printf("INPUT pin=%d value=%d\r\n" , _real_pin , _value ); */ digitalRead( _real_pin ); return _value; };
+
+    _sl.AddPin( this );
+}
+
+InputPin::~InputPin()
+{
+    _sl.RemovePin( this );
+}
+
+void InputPin::begin() 
+{
+//    Serial.println("INPUT pins");
+    do_pinMode();
+    _value = do_digitalRead();
+
+    if(_publish)
+    {
+        Particle.variable( this->name() , _value );
+    }
+    
+};
+
+int InputPin::get() 
+{ 
+    return do_digitalRead() ;
+}
+
 
 SideLightManager::SideLightManager()
 {

@@ -81,7 +81,7 @@ class SideLightPinBasic
         SideLightPinBasic( uint8_t pin , const char * name );
         ~SideLightPinBasic();
         const uint8_t  pin() { return _pin; };
-        const String & name() { return _name; };
+        const char * name() { return _name.c_str(); };
         
     private:
         uint8_t     _pin;
@@ -91,12 +91,9 @@ class SideLightPinBasic
 class OutputPin : public SideLightPinBasic
 {
     public:
-        OutputPin( uint8_t pin , const char * name , bool initial_value = false , bool reverse = false , bool publish = false );
-        OutputPin( const SideLightPinDef pin , const char * name , bool initial_value = false , bool reverse = false , bool publish = false );
+        OutputPin( SideLightManager & SL , uint8_t pin , const char * name , bool initial_value = false , bool reverse = false , bool publish = false );
+        OutputPin( SideLightManager & SL , const SideLightPinDef pin , const char * name , bool initial_value = false , bool reverse = false , bool publish = false );
         ~OutputPin();
-        
-        static void pinModeX( uint8_t a , uint8_t b ) ;
-//        void pinModeX( uint8_t a , uint8_t b ) ;
         
         void begin();
         void set( bool value = true );
@@ -104,6 +101,7 @@ class OutputPin : public SideLightPinBasic
         bool get() { return _value ; } ;
 
     private:
+        SideLightManager        & _sl ;
         Adafruit_MCP23017       * _mcp ;
         uint8_t                 _real_pin ;
         bool                    _value ;
@@ -111,35 +109,31 @@ class OutputPin : public SideLightPinBasic
         bool                    _initial_value ;
         bool                    _publish;
 
-        std::function<void(uint8_t , uint8_t)>      __pinMode ;
-        std::function<void(uint8_t , uint8_t)>      __digitalWrite ;
-        
-        std::function<void()>   * set_pin_mode;
+        std::function<void()>       do_pinMode;
+        std::function<void(bool)>   do_digitalWrite ;
 };
 
 class InputPin : public SideLightPinBasic
 {
     public:
-        InputPin( uint8_t pin , const char * name , bool publish = false );
+        InputPin( SideLightManager & SL , uint8_t pin , const char * name , PinMode mode = INPUT, bool publish = false );
+        InputPin( SideLightManager & SL , const SideLightPinDef pin , const char * name , PinMode mode = INPUT, bool publish = false );
         ~InputPin();
         
-        static void pinModeX( uint8_t a , uint8_t b ) ;
-        
-        void begin() {};
-        void set( bool value = true );
-        void unset();
-        bool get() { return _value ; } ;
+        void begin();
+        int get();
 
     private:
         Adafruit_MCP23017       * _mcp ;
         uint8_t                 _real_pin ;
-        bool                    _value ;
-        bool                    _reverse ;
-        bool                    _initial_value ;
+        int                    _value ;
+        PinMode                 _mode ;
         bool                    _publish;
         
-        std::function<void(uint8_t , uint8_t)>      __pinMode ;
-        std::function<void(uint8_t , uint8_t)>      __digitalWrite ;
+        SideLightManager        & _sl ;
+        
+        std::function<void()>       do_pinMode ;
+        std::function<int()>       do_digitalRead ;
 };
 
 class SideLightManager

@@ -4,9 +4,12 @@
 // This #include statement was automatically added by the Particle IDE.
 #include <Adafruit_MCP23017.h>
 
-OutputPin   // GreenLED( X1 , "green_led" , false , false , true ) ,
-            // PinkLED(  CheckPin<D2>() , "pink_led" , false , false , true ) ,
-            BlueLED(  D7 , "blue_led" );
+SideLightManager            SL ;
+
+OutputPin   OutputTest( SL , X1 , "green_led" , false , false , true ) ,
+            BlueLED(  SL , D7 , "BlueLED" , false , false , true);
+            
+InputPin    InputTest( SL , Y1 , "input_test" , INPUT , true );
 
 void setup()
 {
@@ -17,11 +20,9 @@ void setup()
     //  This initializes every single programmed pin
     Serial.println("----------  STARTING  --------------");
     
-    SideLight.begin();
-    
-    delay(5000);
-    
-    Serial.println("Snooping I@c");
+    SL.begin();
+     
+    Serial.println("Snooping I2C");
     
     snoop_I2C();
 }
@@ -42,11 +43,18 @@ void snoop_I2C()
 void loop() 
 {
     delay(1000);
-    Serial.println("ON");
+    Serial.println("LED ON");
     BlueLED.set();
     
+    OutputTest.set();
+    Serial.printf("OUTPUT=%d INPUT=%d\r\n",OutputTest.get(),InputTest.get());
+    
+    OutputTest.unset();
+    Serial.printf("OUTPUT=%d INPUT=%d\r\n",OutputTest.get(),InputTest.get());
+    
+    
     delay(1000);
-    Serial.println("OFF");
+    Serial.println("LED OFF");
     BlueLED.unset();
 }
 
